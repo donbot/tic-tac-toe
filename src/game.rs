@@ -27,6 +27,13 @@ pub enum MarkSpaceError {
     SpaceTaken,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum GameStatus {
+    InProgress,
+    Won(Player),
+    Draw,
+}
+
 impl GameState {
     pub fn mark_space(&mut self, idx: usize, player: Player) -> Result<(), MarkSpaceError> {
         let space = self.board.get_mut(idx).ok_or(MarkSpaceError::OutOfBounds)?;
@@ -54,6 +61,16 @@ impl GameState {
             let p = self.board[a]?;
             (p == self.board[b]? && p == self.board[c]?).then_some(p)
         })
+    }
+
+    pub fn status(&self) -> GameStatus {
+        if let Some(winner) = self.check_winner() {
+            return GameStatus::Won(winner);
+        }
+        if self.board.iter().all(|space| space.is_some()) {
+            return GameStatus::Draw;
+        }
+        GameStatus::InProgress
     }
 
     pub fn new() -> Self {
@@ -98,7 +115,7 @@ mod tests {
     }
 
     #[test]
-    fn test_check_winner_logic() {
+    fn test_check_winner_scenarios() {
         let scenarios = vec![
             ("Top Row", vec![0, 1, 2], Some(Player::X)),
             ("Middle Row", vec![3, 4, 5], Some(Player::X)),
@@ -122,6 +139,45 @@ mod tests {
                 "Failed on scenario: {}",
                 name.to_string()
             )
+        }
+    }
+    #[test]
+    fn test_status_scenarios() {
+        let scenarios = vec![
+            (
+                "X Wins",
+                vec![(0, Player::X), (1, Player::X), (2, Player::X)],
+                GameStatus::Won(Player::X),
+            ),
+            (
+                "O Wins",
+                vec![(0, Player::O), (1, Player::O), (2, Player::O)],
+                GameStatus::Won(Player::O),
+            ),
+            (
+                "Draw",
+                vec![
+                    (0, Player::X),
+                    (1, Player::O),
+                    (2, Player::X),
+                    (3, Player::X),
+                    (4, Player::O),
+                    (5, Player::X),
+                    (6, Player::O),
+                    (7, Player::X),
+                    (8, Player::O),
+                ],
+                GameStatus::Draw,
+            ),
+            ("In Progress", vec![(0, Player::X)], GameStatus::InProgress),
+        ];
+
+        for (name, moves, expected) in scenarios {
+            let mut state = GameState::new();
+            for (idx, player) in moves {
+                state.mark_space(idx, player).unwrap();
+            }
+            assert_eq!(state.status(), expected, "Failed on scenario: {}", name)
         }
     }
 }
