@@ -38,6 +38,24 @@ impl GameState {
         Ok(())
     }
 
+    pub fn check_winner(&self) -> Option<Player> {
+        const WIN_CONDITIONS: [[usize; 3]; 8] = [
+            [0, 1, 2], // rows
+            [3, 4, 5],
+            [6, 7, 8],
+            [0, 3, 6], // columns
+            [1, 4, 7],
+            [2, 5, 8],
+            [0, 4, 8], // diagonals
+            [2, 4, 6],
+        ];
+
+        WIN_CONDITIONS.iter().find_map(|&[a, b, c]| {
+            let p = self.board[a]?;
+            (p == self.board[b]? && p == self.board[c]?).then_some(p)
+        })
+    }
+
     pub fn new() -> Self {
         Self { board: [None; 9] }
     }
@@ -77,5 +95,33 @@ mod tests {
 
         assert_eq!(state.board[0], Some(Player::X));
         assert_eq!(state.board[1], None);
+    }
+
+    #[test]
+    fn test_check_winner_logic() {
+        let scenarios = vec![
+            ("Top Row", vec![0, 1, 2], Some(Player::X)),
+            ("Middle Row", vec![3, 4, 5], Some(Player::X)),
+            ("Bottom Row", vec![6, 7, 8], Some(Player::X)),
+            ("Left Column", vec![0, 3, 6], Some(Player::X)),
+            ("Middle Column", vec![1, 4, 7], Some(Player::X)),
+            ("Right Column", vec![2, 5, 8], Some(Player::X)),
+            ("Main Diagonal", vec![0, 4, 8], Some(Player::X)),
+            ("Anti-Diagonal", vec![2, 4, 6], Some(Player::X)),
+            ("No Winner yet", vec![0, 1], None),
+        ];
+
+        for (name, indices, expected) in scenarios {
+            let mut state = GameState::new();
+            for i in indices {
+                state.mark_space(i, Player::X).unwrap();
+            }
+            assert_eq!(
+                state.check_winner(),
+                expected,
+                "Failed on scenario: {}",
+                name.to_string()
+            )
+        }
     }
 }
