@@ -1,17 +1,29 @@
 use crate::game::Board;
-use std::io::Write;
+use std::io::{Error, Write};
 
-pub fn render_board<W: Write>(writer: &mut W, board: &Board) {
-    let display_board: [String; 9] = std::array::from_fn(|i| match board[i] {
-        Some(player) => player.to_string(),
-        None => (i + 1).to_string(),
-    });
+pub fn render_board<W: Write>(writer: &mut W, board: &Board) -> Result<(), Error> {
+    let get_mark = |i: usize| -> String {
+        match board[i] {
+            Some(player) => player.to_string(),
+            None => (i + 1).to_string(),
+        }
+    };
 
-    println!("-----------");
-    for row in display_board.chunks(3) {
-        writeln!(writer, " {} | {} | {} ", row[0], row[1], row[2]).unwrap();
-        println!("-----------");
+    writeln!(writer)?;
+    for i in (0..9).step_by(3) {
+        writeln!(
+            writer,
+            " {} | {} | {} ",
+            get_mark(i),
+            get_mark(i + 1),
+            get_mark(i + 2)
+        )?;
+        if i < 6 {
+            writeln!(writer, "-----------")?;
+        }
     }
+    writeln!(writer)?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -24,7 +36,7 @@ mod tests {
         let board = [None; 9];
         let mut buffer = Vec::new();
 
-        render_board(&mut buffer, &board);
+        render_board(&mut buffer, &board).expect("Should render a board with just numbers");
 
         let output = String::from_utf8(buffer).unwrap();
         assert!(output.contains(" 1 | 2 | 3 "));
@@ -39,7 +51,7 @@ mod tests {
         board[4] = Some(Player::O);
 
         let mut buffer = Vec::new();
-        render_board(&mut buffer, &board);
+        render_board(&mut buffer, &board).expect("Should render an X and an O mark");
 
         let output = String::from_utf8(buffer).unwrap();
 

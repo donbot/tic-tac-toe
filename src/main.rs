@@ -1,11 +1,10 @@
 mod display;
 mod game;
 
-use game::Board;
+use crate::game::GameState;
 
 fn main() {
-    let board: Board = [None; 9];
+    let state = GameState::new();
 
-    let mut buffer = Vec::new();
-    display::render_board(&mut buffer, &board);
+    display::render_board(&mut std::io::stdout(), state.board()).expect("Failed to render board");
 }

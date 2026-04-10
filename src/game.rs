@@ -37,6 +37,14 @@ impl GameState {
         *space = Some(player);
         Ok(())
     }
+
+    pub fn new() -> Self {
+        Self { board: [None; 9] }
+    }
+
+    pub fn board(&self) -> &Board {
+        &self.board
+    }
 }
 
 #[cfg(test)]
@@ -45,7 +53,7 @@ mod tests {
 
     #[test]
     fn test_mark_space_errors() {
-        let mut state = GameState { board: [None; 9] };
+        let mut state = GameState::new();
         let err1 = state
             .mark_space(20, Player::X)
             .expect_err("should fail because idx is OOB");
@@ -62,7 +70,7 @@ mod tests {
 
     #[test]
     fn test_mark_space_updates_board() {
-        let mut state = GameState { board: [None; 9] };
+        let mut state = GameState::new();
         state
             .mark_space(0, Player::X)
             .expect("should mark an empty space");
