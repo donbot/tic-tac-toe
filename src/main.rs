@@ -1,5 +1,6 @@
 mod display;
 mod game;
+mod input;
 
 use crate::game::GameState;
 
