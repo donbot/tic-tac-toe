@@ -26,7 +26,7 @@ impl fmt::Display for Player {
     }
 }
 
-pub struct GameState {
+pub struct State {
     board: Board,
     current_player: Player,
 }
@@ -38,13 +38,13 @@ pub enum MarkSpaceError {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum GameStatus {
+pub enum Status {
     InProgress,
     Won(Player),
     Draw,
 }
 
-impl GameState {
+impl State {
     pub fn new() -> Self {
         Self {
             board: [None; 9],
@@ -58,14 +58,14 @@ impl GameState {
         Ok(())
     }
 
-    pub fn status(&self) -> GameStatus {
+    pub fn status(&self) -> Status {
         if let Some(winner) = self.check_winner() {
-            return GameStatus::Won(winner);
+            return Status::Won(winner);
         }
         if self.board.iter().all(|space| space.is_some()) {
-            return GameStatus::Draw;
+            return Status::Draw;
         }
-        GameStatus::InProgress
+        Status::InProgress
     }
 
     pub fn board(&self) -> &Board {
@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn test_mark_space_errors() {
-        let mut state = GameState::new();
+        let mut state = State::new();
         let err1 = state
             .mark_space(20)
             .expect_err("should fail because idx is OOB");
@@ -128,7 +128,7 @@ mod tests {
 
     #[test]
     fn test_mark_space_updates_board() {
-        let mut state = GameState::new();
+        let mut state = State::new();
         state.mark_space(0).expect("should mark an empty space");
 
         assert_eq!(state.board[0], Some(state.current_player()));
@@ -150,7 +150,7 @@ mod tests {
         ];
 
         for (name, indices, player, expected) in scenarios {
-            let mut state = GameState::new();
+            let mut state = State::new();
             for i in indices {
                 state.board[i] = Some(player);
             }
@@ -171,7 +171,7 @@ mod tests {
                 // O | O |
                 //   |   |
                 vec![0, 3, 1, 4, 2],
-                GameStatus::Won(Player::X),
+                Status::Won(Player::X),
             ),
             (
                 "O Wins",
@@ -179,7 +179,7 @@ mod tests {
                 // O | O | O
                 // X |   |
                 vec![0, 3, 1, 4, 6, 5],
-                GameStatus::Won(Player::O),
+                Status::Won(Player::O),
             ),
             (
                 "Draw",
@@ -187,13 +187,13 @@ mod tests {
                 // X | O | X
                 // O | X | O
                 vec![0, 1, 2, 4, 3, 6, 5, 8, 7],
-                GameStatus::Draw,
+                Status::Draw,
             ),
-            ("In Progress", vec![0], GameStatus::InProgress),
+            ("In Progress", vec![0], Status::InProgress),
         ];
 
         for (name, moves, expected) in scenarios {
-            let mut state = GameState::new();
+            let mut state = State::new();
             for idx in moves {
                 state.make_move(idx).unwrap();
             }
@@ -203,7 +203,7 @@ mod tests {
     }
     #[test]
     fn test_make_move_updates_current_player() {
-        let mut state = GameState::new();
+        let mut state = State::new();
         assert_eq!(state.current_player(), Player::X);
 
         state.make_move(0).unwrap();
