@@ -109,34 +109,45 @@ impl State {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_mark_space_errors() {
-        let mut state = State::new();
-        let err1 = state
-            .mark_space(20)
-            .expect_err("should fail because idx is OOB");
+    mod mark_space {
+        use super::*;
 
-        assert_eq!(err1, MarkSpaceError::OutOfBounds);
+        #[test]
+        fn fails_when_index_is_out_of_bounds() {
+            let mut state = State::new();
+            let err = state
+                .mark_space(20)
+                .expect_err("should fail because idx is OOB");
 
-        state.mark_space(2).unwrap();
-        let err2 = state
-            .mark_space(2)
-            .expect_err("should fail because space is taken");
+            assert_eq!(err, MarkSpaceError::OutOfBounds);
+        }
+        #[test]
+        fn fails_when_space_is_taken() {
+            let mut state = State::new();
+            state.mark_space(2).unwrap();
+            let err = state
+                .mark_space(2)
+                .expect_err("should fail because space is taken");
 
-        assert_eq!(err2, MarkSpaceError::SpaceTaken);
+            assert_eq!(err, MarkSpaceError::SpaceTaken);
+        }
+
+        #[test]
+        fn assigns_index_to_current_player() {
+            let mut state = State::new();
+            state.mark_space(0).expect("should mark an empty space");
+
+            assert_eq!(
+                state.board[0],
+                Some(state.current_player()),
+                "should be occupied by current player"
+            );
+            assert_eq!(state.board[1], None, "should still be empty");
+        }
     }
 
     #[test]
-    fn test_mark_space_updates_board() {
-        let mut state = State::new();
-        state.mark_space(0).expect("should mark an empty space");
-
-        assert_eq!(state.board[0], Some(state.current_player()));
-        assert_eq!(state.board[1], None);
-    }
-
-    #[test]
-    fn test_check_winner_scenarios() {
+    fn check_winner_scenarios() {
         let scenarios = vec![
             ("Top Row", vec![0, 1, 2], Player::X, Some(Player::X)),
             ("Middle Row", vec![3, 4, 5], Player::O, Some(Player::O)),
@@ -157,13 +168,14 @@ mod tests {
             assert_eq!(
                 state.check_winner(),
                 expected,
-                "Failed on scenario: {}",
+                "scenario: {}",
                 name.to_string()
             )
         }
     }
+
     #[test]
-    fn test_status_scenarios() {
+    fn status_scenarios() {
         let scenarios = vec![
             (
                 "X Wins",
@@ -198,15 +210,29 @@ mod tests {
                 state.make_move(idx).unwrap();
             }
 
-            assert_eq!(state.status(), expected, "Failed on scenario: {}", name)
+            assert_eq!(state.status(), expected, "scenario: {}", name)
         }
     }
-    #[test]
-    fn test_make_move_updates_current_player() {
-        let mut state = State::new();
-        assert_eq!(state.current_player(), Player::X);
 
-        state.make_move(0).unwrap();
-        assert_eq!(state.current_player(), Player::O);
+    mod make_move {
+        use super::*;
+
+        #[test]
+        fn switches_players_after_successful_move() {
+            let mut state = State::new();
+            let first_player = state.current_player();
+
+            state.make_move(0).unwrap();
+            assert_ne!(state.current_player(), first_player);
+        }
+
+        #[test]
+        fn does_not_switch_players_on_error() {
+            let mut state = State::new();
+            let first_player = state.current_player();
+
+            state.make_move(20).unwrap_err();
+            assert_eq!(state.current_player(), first_player);
+        }
     }
 }

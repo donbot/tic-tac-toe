@@ -80,6 +80,10 @@ pub fn announce_draw<W: Write>(writer: &mut W) -> io::Result<()> {
     print(writer, "It's a Draw!")
 }
 
+pub fn announce_quit<W: Write>(writer: &mut W) -> io::Result<()> {
+    print(writer, "Game exited.")
+}
+
 fn print<W: Write>(writer: &mut W, msg: &str) -> io::Result<()> {
     writeln!(writer, "{}", msg)?;
     writer.flush()
@@ -88,64 +92,76 @@ fn print<W: Write>(writer: &mut W, msg: &str) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::Player;
-    use std::io::Cursor;
 
-    #[test]
-    fn test_print_board_empty() {
-        let board = [None; 9];
-        let mut buffer = Vec::new();
+    mod render_board {
+        use super::*;
 
-        render_board(&mut buffer, &board).expect("Should render a board with just numbers");
+        #[test]
+        fn renders_an_empty_board() {
+            let board = [None; 9];
+            let mut buffer = Vec::new();
 
-        let output = String::from_utf8(buffer).unwrap();
-        assert!(output.contains(" 1 | 2 | 3 "));
-        assert!(output.contains(" 4 | 5 | 6 "));
-        assert!(output.contains(" 7 | 8 | 9 "));
-    }
+            render_board(&mut buffer, &board).expect("Should render a board with just numbers");
 
-    #[test]
-    fn test_print_board_with_players() {
-        let mut board = [None; 9];
-        board[0] = Some(Player::X);
-        board[4] = Some(Player::O);
+            let output = String::from_utf8(buffer).unwrap();
+            assert!(output.contains(" 1 | 2 | 3 "));
+            assert!(output.contains(" 4 | 5 | 6 "));
+            assert!(output.contains(" 7 | 8 | 9 "));
+        }
 
-        let mut buffer = Vec::new();
-        render_board(&mut buffer, &board).expect("Should render an X and an O mark");
+        #[test]
+        fn renders_board_with_both_players() {
+            let mut board = [None; 9];
+            board[0] = Some(Player::X);
+            board[4] = Some(Player::O);
 
-        let output = String::from_utf8(buffer).unwrap();
+            let mut buffer = Vec::new();
+            render_board(&mut buffer, &board).expect("Should render an X and an O mark");
 
-        assert!(output.contains(" X | 2 | 3 "));
-        assert!(output.contains(" 4 | O | 6 "));
-    }
+            let output = String::from_utf8(buffer).unwrap();
 
-    #[test]
-    fn test_get_action_returns_move_action() {
-        let mut input = Cursor::new("5\n");
-        let result = get_action(&mut input);
-
-        assert_eq!(result, Action::Move(4));
-    }
-
-    #[test]
-    fn test_get_action_returns_invalid_action() {
-        let scenarios = [("Out of Bounds", "9000\n"), ("Invalid Input", "potato\n")];
-
-        for (name, input_text) in scenarios {
-            let mut input = Cursor::new(input_text);
-            let result = get_action(&mut input);
-            assert_eq!(result, Action::Invalid, "Failed in Scenario {}", name);
+            assert!(output.contains(" X | 2 | 3 "));
+            assert!(output.contains(" 4 | O | 6 "));
+            assert!(output.contains(" 7 | 8 | 9 "));
         }
     }
 
-    #[test]
-    fn test_get_action_returns_quit_action() {
-        let scenarios = [("quit", "quit\n"), ("q", "q\n")];
+    mod get_action {
+        use super::*;
+        use std::io::Cursor;
 
-        for (name, input_text) in scenarios {
-            let mut input = Cursor::new(input_text);
+        #[test]
+        fn returns_move_action_if_input_passes_validation() {
+            let mut input = Cursor::new("5\n");
             let result = get_action(&mut input);
-            assert_eq!(result, Action::Quit, "Failed in Scenario {}", name);
+
+            assert_eq!(result, Action::Move(4));
+        }
+
+        #[test]
+        fn returns_invalid_action_if_oob_or_input_is_invalid() {
+            let scenarios = [("Out of Bounds", "9000\n"), ("Invalid Input", "potato\n")];
+
+            for (name, input_text) in scenarios {
+                let mut input = Cursor::new(input_text);
+                let result = get_action(&mut input);
+                assert_eq!(result, Action::Invalid, "scenario \"{}\"", name);
+            }
+        }
+
+        #[test]
+        fn returns_quit_action_on_quit_command_or_eof() {
+            let scenarios = [
+                ("Quit", "quit\n"),
+                ("Quit Shortcut", "q\n"),
+                ("End of File", ""),
+            ];
+
+            for (name, input_text) in scenarios {
+                let mut input = Cursor::new(input_text);
+                let result = get_action(&mut input);
+                assert_eq!(result, Action::Quit, "scenario \"{}\"", name);
+            }
         }
     }
 }

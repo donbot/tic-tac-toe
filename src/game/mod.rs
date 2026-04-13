@@ -30,7 +30,10 @@ impl<R: BufRead, W: Write> Game<R, W> {
                     ui::report_invalid_input(&mut self.writer)?;
                     continue;
                 }
-                ui::Action::Quit => break,
+                ui::Action::Quit => {
+                    ui::announce_quit(&mut self.writer)?;
+                    break;
+                }
             };
 
             if let Err(e) = self.state.make_move(move_idx) {
@@ -62,41 +65,51 @@ mod tests {
     use std::io::Cursor;
 
     #[test]
-    fn test_game_x_wins_straight_line() {
+    fn runs_until_game_is_complete() {
+        // X | X | X
+        // O | O |
+        //   |   |
         let input = b"1\n4\n2\n5\n3\n";
         let mut output = Vec::new();
 
         let mut game = Game::new(Cursor::new(input), &mut output);
-        game.run().ok();
+        game.run().unwrap();
 
         let result = String::from_utf8(output).unwrap();
 
-        assert!(result.contains("Player X wins!"));
+        assert!(
+            result.contains("Player X wins!"),
+            "should announce X as the winner"
+        );
     }
 
     #[test]
-    fn test_game_invalid_input_retry() {
-        let input = b"abc\n1\n1\n2\n4\n3\n5\n";
+    fn retries_until_input_is_valid() {
+        let input = b"abc\n1\n1\n4\n2\n5\n3\n";
         let mut output = Vec::new();
 
         let mut game = Game::new(Cursor::new(input), &mut output);
-        game.run().ok();
+        game.run().unwrap();
 
         let result = String::from_utf8(output).unwrap();
 
-        assert!(result.contains("Invalid input"));
-        assert!(result.contains("Error: SpaceTaken"));
+        assert!(
+            result.contains("Invalid input"),
+            "should have warned about invalid input"
+        );
+        assert!(
+            result.contains("Player X wins!"),
+            "should continue to completion after errors"
+        );
     }
-
     #[test]
-    fn test_game_draw() {
-        let input = b"1\n3\n2\n4\n6\n5\n7\n8\n9\n";
+    fn quits_on_command() {
+        let input = b"quit\n";
         let mut output = Vec::new();
-
         let mut game = Game::new(Cursor::new(input), &mut output);
-        game.run().ok();
+        game.run().unwrap();
 
         let result = String::from_utf8(output).unwrap();
-        assert!(result.contains("It's a Draw!"));
+        assert!(result.contains("Game exited."));
     }
 }
