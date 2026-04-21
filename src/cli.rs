@@ -1,11 +1,45 @@
-use crate::game::{Board, MarkSpaceError, Player};
+use crate::game::{Action, Board, Game, MarkSpaceError, Player, Status};
 use std::io::{self, BufRead, Error, Write};
 
-#[derive(Debug, PartialEq)]
-pub enum Action {
-    Move(usize),
-    Quit,
-    Invalid,
+pub fn run<R: BufRead, W: Write>(mut reader: R, mut writer: W) -> std::io::Result<()> {
+    let mut game = Game::new();
+
+    loop {
+        render_board(&mut writer, game.state.board())?;
+        prompt_move(&mut writer, game.state.current_player())?;
+
+        let move_idx = match get_action(&mut reader) {
+            Action::Move(idx) => idx,
+            Action::Invalid => {
+                report_invalid_input(&mut writer)?;
+                continue;
+            }
+            Action::Quit => {
+                announce_quit(&mut writer)?;
+                break;
+            }
+        };
+
+        if let Err(e) = game.state.make_move(move_idx) {
+            report_error(&mut writer, e)?;
+            continue;
+        }
+
+        match game.state.status() {
+            Status::Won(winner) => {
+                render_board(&mut writer, game.state.board())?;
+                announce_winner(&mut writer, winner)?;
+                break;
+            }
+            Status::Draw => {
+                render_board(&mut writer, game.state.board())?;
+                announce_draw(&mut writer)?;
+                break;
+            }
+            Status::InProgress => continue,
+        }
+    }
+    Ok(())
 }
 
 pub fn get_action<R: BufRead>(reader: &mut R) -> Action {
@@ -15,18 +49,7 @@ pub fn get_action<R: BufRead>(reader: &mut R) -> Action {
         return Action::Quit;
     }
 
-    let input = input.trim().to_lowercase();
-
-    if input == "quit" || input == "q" {
-        return Action::Quit;
-    }
-
-    input
-        .parse::<usize>()
-        .ok()
-        .filter(|&n| n >= 1 && n <= 9)
-        .map(|n| Action::Move(n - 1))
-        .unwrap_or(Action::Invalid)
+    Action::from_str(&input)
 }
 
 pub fn render_board<W: Write>(writer: &mut W, board: &Board) -> Result<(), Error> {
@@ -162,6 +185,57 @@ mod tests {
                 let result = get_action(&mut input);
                 assert_eq!(result, Action::Quit, "scenario \"{}\"", name);
             }
+        }
+    }
+
+    mod run {
+        use super::*;
+        use std::io::Cursor;
+
+        #[test]
+        fn runs_until_game_is_complete() {
+            // X | X | X
+            // O | O |
+            //   |   |
+            let input = b"1\n4\n2\n5\n3\n";
+            let mut output = Vec::new();
+
+            let _ = run(Cursor::new(input), &mut output);
+
+            let result = String::from_utf8(output).unwrap();
+
+            assert!(
+                result.contains("Player X wins!"),
+                "should announce X as the winner"
+            );
+        }
+
+        #[test]
+        fn retries_until_input_is_valid() {
+            let input = b"abc\n1\n1\n4\n2\n5\n3\n";
+            let mut output = Vec::new();
+
+            let _ = run(Cursor::new(input), &mut output);
+
+            let result = String::from_utf8(output).unwrap();
+
+            assert!(
+                result.contains("Invalid input"),
+                "should have warned about invalid input"
+            );
+            assert!(
+                result.contains("Player X wins!"),
+                "should continue to completion after errors"
+            );
+        }
+        #[test]
+        fn quits_on_command() {
+            let input = b"quit\n";
+            let mut output = Vec::new();
+            let _ = run(Cursor::new(input), &mut output);
+
+            let result = String::from_utf8(output).unwrap();
+            assert!(result.contains("Game exited."));
         }
     }
 }

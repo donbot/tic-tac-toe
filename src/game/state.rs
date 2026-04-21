@@ -26,11 +26,6 @@ impl fmt::Display for Player {
     }
 }
 
-pub struct State {
-    board: Board,
-    current_player: Player,
-}
-
 #[derive(Debug, PartialEq)]
 pub enum MarkSpaceError {
     OutOfBounds,
@@ -42,6 +37,11 @@ pub enum Status {
     InProgress,
     Won(Player),
     Draw,
+}
+
+pub struct State {
+    board: Board,
+    current_player: Player,
 }
 
 impl State {
