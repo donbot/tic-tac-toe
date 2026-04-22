@@ -52,10 +52,12 @@ impl State {
         }
     }
 
-    pub fn make_move(&mut self, idx: usize) -> Result<(), MarkSpaceError> {
-        self.mark_space(idx)?;
-        self.current_player = self.current_player.next();
-        Ok(())
+    pub fn board(&self) -> &Board {
+        &self.board
+    }
+
+    pub fn current_player(&self) -> Player {
+        self.current_player
     }
 
     pub fn status(&self) -> Status {
@@ -68,22 +70,18 @@ impl State {
         Status::InProgress
     }
 
-    pub fn board(&self) -> &Board {
-        &self.board
-    }
-
-    pub fn current_player(&self) -> Player {
-        self.current_player
-    }
-
-    fn mark_space(&mut self, idx: usize) -> Result<(), MarkSpaceError> {
+    pub(super) fn mark_space(&mut self, idx: usize, player: Player) -> Result<(), MarkSpaceError> {
         let space = self.board.get_mut(idx).ok_or(MarkSpaceError::OutOfBounds)?;
         if space.is_some() {
             return Err(MarkSpaceError::SpaceTaken);
         }
 
-        *space = Some(self.current_player);
+        *space = Some(player);
         Ok(())
+    }
+
+    pub(super) fn next_turn(&mut self) {
+        self.current_player = self.current_player.next();
     }
 
     fn check_winner(&self) -> Option<Player> {
@@ -116,7 +114,7 @@ mod tests {
         fn fails_when_index_is_out_of_bounds() {
             let mut state = State::new();
             let err = state
-                .mark_space(20)
+                .mark_space(20, state.current_player())
                 .expect_err("should fail because idx is OOB");
 
             assert_eq!(err, MarkSpaceError::OutOfBounds);
@@ -124,9 +122,9 @@ mod tests {
         #[test]
         fn fails_when_space_is_taken() {
             let mut state = State::new();
-            state.mark_space(2).unwrap();
+            state.mark_space(2, state.current_player()).unwrap();
             let err = state
-                .mark_space(2)
+                .mark_space(2, state.current_player())
                 .expect_err("should fail because space is taken");
 
             assert_eq!(err, MarkSpaceError::SpaceTaken);
@@ -135,7 +133,9 @@ mod tests {
         #[test]
         fn assigns_index_to_current_player() {
             let mut state = State::new();
-            state.mark_space(0).expect("should mark an empty space");
+            state
+                .mark_space(0, state.current_player())
+                .expect("should mark an empty space");
 
             assert_eq!(
                 state.board[0],
@@ -207,32 +207,12 @@ mod tests {
         for (name, moves, expected) in scenarios {
             let mut state = State::new();
             for idx in moves {
-                state.make_move(idx).unwrap();
+                let player = state.current_player();
+                state.mark_space(idx, player).unwrap();
+                state.next_turn();
             }
 
             assert_eq!(state.status(), expected, "scenario: {}", name)
-        }
-    }
-
-    mod make_move {
-        use super::*;
-
-        #[test]
-        fn switches_players_after_successful_move() {
-            let mut state = State::new();
-            let first_player = state.current_player();
-
-            state.make_move(0).unwrap();
-            assert_ne!(state.current_player(), first_player);
-        }
-
-        #[test]
-        fn does_not_switch_players_on_error() {
-            let mut state = State::new();
-            let first_player = state.current_player();
-
-            state.make_move(20).unwrap_err();
-            assert_eq!(state.current_player(), first_player);
         }
     }
 }

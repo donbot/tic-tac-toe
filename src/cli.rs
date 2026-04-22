@@ -5,8 +5,8 @@ pub fn run<R: BufRead, W: Write>(mut reader: R, mut writer: W) -> std::io::Resul
     let mut game = Game::new();
 
     loop {
-        render_board(&mut writer, game.state.board())?;
-        prompt_move(&mut writer, game.state.current_player())?;
+        render_board(&mut writer, game.board())?;
+        prompt_move(&mut writer, game.current_player())?;
 
         let move_idx = match get_action(&mut reader) {
             Action::Move(idx) => idx,
@@ -20,23 +20,22 @@ pub fn run<R: BufRead, W: Write>(mut reader: R, mut writer: W) -> std::io::Resul
             }
         };
 
-        if let Err(e) = game.state.make_move(move_idx) {
-            report_error(&mut writer, e)?;
-            continue;
-        }
-
-        match game.state.status() {
-            Status::Won(winner) => {
-                render_board(&mut writer, game.state.board())?;
+        match game.make_move(move_idx) {
+            Ok(Status::Won(winner)) => {
+                render_board(&mut writer, game.board())?;
                 announce_winner(&mut writer, winner)?;
                 break;
             }
-            Status::Draw => {
-                render_board(&mut writer, game.state.board())?;
+            Ok(Status::Draw) => {
+                render_board(&mut writer, game.board())?;
                 announce_draw(&mut writer)?;
                 break;
             }
-            Status::InProgress => continue,
+            Ok(Status::InProgress) => continue,
+            Err(e) => {
+                report_error(&mut writer, e)?;
+                continue;
+            }
         }
     }
     Ok(())
@@ -48,8 +47,7 @@ pub fn get_action<R: BufRead>(reader: &mut R) -> Action {
     if reader.read_line(&mut input).unwrap_or(0) == 0 {
         return Action::Quit;
     }
-
-    Action::from_str(&input)
+    input.parse::<Action>().expect("Parsing failed")
 }
 
 pub fn render_board<W: Write>(writer: &mut W, board: &Board) -> Result<(), Error> {
