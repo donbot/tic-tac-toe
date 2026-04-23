@@ -1,8 +1,9 @@
+use serde::Serialize;
 use std::fmt::{self};
 
 pub type Board = [Option<Player>; 9];
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize)]
 pub enum Player {
     X,
     O,

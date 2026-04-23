@@ -1,14 +1,22 @@
 mod cli;
 mod game;
+mod web;
 
 use std::io;
 
-fn main() -> std::io::Result<()> {
-    let reader = io::stdin().lock();
-    let writer = io::stdout();
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
+    let args: Vec<String> = std::env::args().collect();
 
-    println!("Tic Tac Toe");
-    cli::run(reader, writer)?;
+    if args.contains(&"--web".to_string()) {
+        web::start().await;
+    } else {
+        let reader = io::stdin().lock();
+        let writer = io::stdout();
+
+        println!("Tic Tac Toe");
+        cli::run(reader, writer)?;
+    }
 
     Ok(())
 }
