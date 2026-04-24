@@ -20,7 +20,7 @@ pub struct Lobby {
     pub tx: broadcast::Sender<String>,
 }
 
-pub async fn start() {
+pub async fn start(listener: tokio::net::TcpListener) -> std::io::Result<()> {
     let (tx, _rx) = broadcast::channel(100);
     let app_state = Arc::new(Lobby {
         game: Mutex::new(Game::new()),
@@ -31,9 +31,9 @@ pub async fn start() {
         .route("/ws", any(join_game))
         .with_state(app_state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("Web server live at ws://localhost:3000/ws");
-    axum::serve(listener, app).await.unwrap()
+    let local_addr = listener.local_addr()?;
+    println!("Web server live at ws://{}", local_addr);
+    axum::serve(listener, app).await
 }
 
 async fn join_game(

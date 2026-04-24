@@ -181,7 +181,7 @@ mod tests {
             // X | X | X
             // O | O |
             //   |   |
-            let input = b"1\n4\n2\n5\n3\n";
+            let input = ["1", "4", "2", "5", "3"].join("\n");
             let mut output = Vec::new();
 
             let _ = run(Cursor::new(input), &mut output);
@@ -196,7 +196,7 @@ mod tests {
 
         #[test]
         fn retries_until_input_is_valid() {
-            let input = b"abc\n1\n1\n4\n2\n5\n3\n";
+            let input = ["abc", "1", "1", "4", "2", "5", "3"].join("\n");
             let mut output = Vec::new();
 
             let _ = run(Cursor::new(input), &mut output);

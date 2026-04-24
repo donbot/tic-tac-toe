@@ -2,9 +2,9 @@ pub mod cli;
 pub mod web;
 
 use crate::game::{ActionError, Board, Event, Game, Player, Status};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum GameMessage {
     Update {
