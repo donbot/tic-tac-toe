@@ -1,4 +1,7 @@
-use crate::game::{Action, Board, Game, MarkSpaceError, Player, Status};
+use crate::{
+    game::{Action, ActionError, Board, Game, Player},
+    interface::GameMessage,
+};
 use std::io::{self, BufRead, Error, Write};
 
 pub fn run<R: BufRead, W: Write>(mut reader: R, mut writer: W) -> std::io::Result<()> {
@@ -8,46 +11,49 @@ pub fn run<R: BufRead, W: Write>(mut reader: R, mut writer: W) -> std::io::Resul
         render_board(&mut writer, game.board())?;
         prompt_move(&mut writer, game.current_player())?;
 
-        let move_idx = match get_action(&mut reader) {
-            Action::Move(idx) => idx,
-            Action::Invalid => {
-                report_invalid_input(&mut writer)?;
+        let action = match get_action(&mut reader) {
+            Ok(a) => a,
+            Err(e) => {
+                let err_msg = GameMessage::from_error(&e);
+                if let GameMessage::Error { message } = err_msg {
+                    writeln!(writer, "{}", message)?;
+                }
                 continue;
-            }
-            Action::Quit => {
-                announce_quit(&mut writer)?;
-                break;
             }
         };
 
-        match game.make_move(move_idx) {
-            Ok(Status::Won(winner)) => {
-                render_board(&mut writer, game.board())?;
-                announce_winner(&mut writer, winner)?;
-                break;
+        let event = game.process_action(action);
+        let msg = GameMessage::from_event(&game, &event);
+
+        match msg {
+            GameMessage::Update { message, .. } => {
+                writeln!(writer, "{}", message)?;
             }
-            Ok(Status::Draw) => {
-                render_board(&mut writer, game.board())?;
-                announce_draw(&mut writer)?;
-                break;
-            }
-            Ok(Status::InProgress) => continue,
-            Err(e) => {
-                report_error(&mut writer, e)?;
+            GameMessage::Error { message } => {
+                writeln!(writer, "{}", message)?;
                 continue;
+            }
+            GameMessage::Quit { message } => {
+                writeln!(writer, "{}", message)?;
+                break;
+            }
+            GameMessage::GameOver { board, message, .. } => {
+                render_board(&mut writer, &board)?;
+                writeln!(writer, "{}", message)?;
+                break;
             }
         }
     }
     Ok(())
 }
 
-pub fn get_action<R: BufRead>(reader: &mut R) -> Action {
+pub fn get_action<R: BufRead>(reader: &mut R) -> Result<Action, ActionError> {
     let mut input = String::new();
 
     if reader.read_line(&mut input).unwrap_or(0) == 0 {
-        return Action::Quit;
+        return Ok(Action::Quit);
     }
-    input.parse::<Action>().expect("Parsing failed")
+    input.trim().parse::<Action>()
 }
 
 pub fn render_board<W: Write>(writer: &mut W, board: &Board) -> Result<(), Error> {
@@ -80,29 +86,6 @@ pub fn prompt_move<W: Write>(writer: &mut W, player: Player) -> io::Result<()> {
         writer,
         &format!("Player {}, enter your move (1-9):", player),
     )
-}
-
-pub fn report_invalid_input<W: Write>(writer: &mut W) -> io::Result<()> {
-    print(
-        writer,
-        "Invalid input. Please enter a number between 1 and 9.",
-    )
-}
-
-pub fn report_error<W: Write>(writer: &mut W, error: MarkSpaceError) -> io::Result<()> {
-    print(writer, &format!("Error: {:?}. Try again.", error))
-}
-
-pub fn announce_winner<W: Write>(writer: &mut W, winner: Player) -> io::Result<()> {
-    print(writer, &format!("Player {} wins!", winner))
-}
-
-pub fn announce_draw<W: Write>(writer: &mut W) -> io::Result<()> {
-    print(writer, "It's a Draw!")
-}
-
-pub fn announce_quit<W: Write>(writer: &mut W) -> io::Result<()> {
-    print(writer, "Game exited.")
 }
 
 fn print<W: Write>(writer: &mut W, msg: &str) -> io::Result<()> {
@@ -154,19 +137,22 @@ mod tests {
         #[test]
         fn returns_move_action_if_input_passes_validation() {
             let mut input = Cursor::new("5\n");
-            let result = get_action(&mut input);
+            let result = get_action(&mut input).unwrap();
 
             assert_eq!(result, Action::Move(4));
         }
 
         #[test]
-        fn returns_invalid_action_if_oob_or_input_is_invalid() {
-            let scenarios = [("Out of Bounds", "9000\n"), ("Invalid Input", "potato\n")];
+        fn returns_action_error_if_oob_or_input_is_invalid() {
+            let scenarios = [
+                ("Out of Bounds", "9000\n", ActionError::OutOfRange),
+                ("Invalid Input", "potato\n", ActionError::NotANumber),
+            ];
 
-            for (name, input_text) in scenarios {
+            for (name, input_text, expected) in scenarios {
                 let mut input = Cursor::new(input_text);
-                let result = get_action(&mut input);
-                assert_eq!(result, Action::Invalid, "scenario \"{}\"", name);
+                let result = get_action(&mut input).unwrap_err();
+                assert_eq!(result, expected, "scenario \"{}\"", name);
             }
         }
 
@@ -180,7 +166,7 @@ mod tests {
 
             for (name, input_text) in scenarios {
                 let mut input = Cursor::new(input_text);
-                let result = get_action(&mut input);
+                let result = get_action(&mut input).unwrap();
                 assert_eq!(result, Action::Quit, "scenario \"{}\"", name);
             }
         }
@@ -218,7 +204,7 @@ mod tests {
             let result = String::from_utf8(output).unwrap();
 
             assert!(
-                result.contains("Invalid input"),
+                result.contains("Please enter a valid digit"),
                 "should have warned about invalid input"
             );
             assert!(

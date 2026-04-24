@@ -8,11 +8,24 @@ use std::str::FromStr;
 pub enum Action {
     Move(usize),
     Quit,
-    Invalid,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ActionError {
+    NotANumber,
+    OutOfRange,
+}
+
+pub enum Event {
+    BoardUpdate,
+    GameOver(Status),
+    MoveError(MarkSpaceError),
+    Quit,
 }
 
 impl FromStr for Action {
-    type Err = ();
+    type Err = ActionError;
+
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         let input = input.trim().to_lowercase();
 
@@ -20,14 +33,11 @@ impl FromStr for Action {
             return Ok(Action::Quit);
         }
 
-        let action = input
-            .parse::<usize>()
-            .ok()
-            .filter(|&n| n >= 1 && n <= 9)
-            .map(|n| Action::Move(n - 1))
-            .unwrap_or(Action::Invalid);
-
-        Ok(action)
+        match input.parse::<usize>() {
+            Ok(idx) if (1..=9).contains(&idx) => Ok(Action::Move(idx - 1)),
+            Ok(_) => Err(ActionError::OutOfRange),
+            Err(_) => Err(ActionError::NotANumber),
+        }
     }
 }
 
@@ -50,7 +60,18 @@ impl Game {
         self.state.current_player()
     }
 
-    pub fn make_move(&mut self, idx: usize) -> Result<Status, MarkSpaceError> {
+    pub fn process_action(&mut self, action: Action) -> Event {
+        match action {
+            Action::Quit => Event::Quit,
+            Action::Move(idx) => match self.make_move(idx) {
+                Ok(Status::InProgress) => Event::BoardUpdate,
+                Ok(status) => Event::GameOver(status),
+                Err(e) => Event::MoveError(e),
+            },
+        }
+    }
+
+    fn make_move(&mut self, idx: usize) -> Result<Status, MarkSpaceError> {
         let player = self.current_player();
         self.state.mark_space(idx, player)?;
 

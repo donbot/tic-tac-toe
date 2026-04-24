@@ -1,7 +1,7 @@
-mod cli;
 mod game;
-mod web;
+mod interface;
 
+use crate::interface::{cli, web};
 use std::io;
 
 #[tokio::main]
