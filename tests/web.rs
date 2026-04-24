@@ -1,7 +1,10 @@
 use futures_util::{SinkExt, StreamExt};
 use tic_tac_toe::{
     game::Player,
-    interface::{GameMessage, web},
+    interface::{
+        GameMessage,
+        web::{self, types::WebAction},
+    },
 };
 use tokio::net::TcpListener;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
@@ -15,33 +18,78 @@ async fn test_game_flow() {
     });
 
     let url = format!("ws://{}/ws", addr);
-    let (ws_stream, _) = connect_async(url).await.expect("Failed to connect");
-    let (mut tx, mut rx) = ws_stream.split();
 
-    async fn recv<S>(rx: &mut S) -> GameMessage
-    where
-        S: StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>> + Unpin,
-    {
-        let msg = rx.next().await.unwrap().unwrap();
-        serde_json::from_str(msg.to_text().unwrap()).unwrap()
+    // connect Player X
+    let (ws_x, _) = connect_async(&url).await.unwrap();
+    let (mut tx_x, mut rx_x) = ws_x.split();
+    assert!(matches!(recv(&mut rx_x).await, GameMessage::Update { .. }));
+
+    // connect Player O
+    let (ws_o, _) = connect_async(&url).await.unwrap();
+    let (mut tx_o, mut rx_o) = ws_o.split();
+    assert!(matches!(recv(&mut rx_o).await, GameMessage::Update { .. }));
+
+    // Player X claims seat X
+    send(&mut tx_x, WebAction::Claim(Player::X)).await;
+    let claim_x = recv(&mut rx_x).await;
+    let _ = recv(&mut rx_o).await;
+    assert!(
+        matches!(claim_x, GameMessage::Update { ref message, .. } if message.contains("Player X joined"))
+    );
+
+    // Player O claims seat O
+    send(&mut tx_o, WebAction::Claim(Player::O)).await;
+    let claim_o = recv(&mut rx_o).await;
+    let _ = recv(&mut rx_x).await;
+    assert!(
+        matches!(claim_o, GameMessage::Update { ref message, .. } if message.contains("Player O joined"))
+    );
+
+    // X makes valid move.
+    send(&mut tx_x, WebAction::Move(1)).await;
+    let move_x = recv(&mut rx_x).await;
+    let _ = recv(&mut rx_o).await;
+    if let GameMessage::Update { board, .. } = move_x {
+        assert_eq!(board[0], Some(Player::X));
     }
 
-    let msg = rx.next().await.unwrap().unwrap();
-    assert!(matches!(msg, Message::Text(ref t) if t.contains("Game Started!")));
+    // X's out of turn move is ignored.
+    send(&mut tx_x, WebAction::Move(2)).await;
 
-    tx.send(Message::Text("1".into())).await.unwrap();
+    // O makes valid move.
+    send(&mut tx_o, WebAction::Move(4)).await;
+    let move_o = recv(&mut rx_o).await;
+    let _ = recv(&mut rx_x).await;
+    if let GameMessage::Update { board, .. } = move_o {
+        assert_eq!(board[3], Some(Player::O));
+    }
+
+    // X quits. O receives broadcast of X quitting.
+    send(&mut tx_x, WebAction::Quit).await;
     assert!(
-        matches!(recv(&mut rx).await, GameMessage::Update { board, .. } if board[0] == Some(Player::X))
+        matches!(recv(&mut rx_o).await, GameMessage::Update { ref message, .. } if message.contains("left"))
     );
+}
 
-    tx.send(Message::Text("1".into())).await.unwrap();
-    assert!(
-        matches!(recv(&mut rx).await, GameMessage::Error { message } if message.contains("SpaceTaken"))
-    );
+async fn send<S>(tx: &mut S, action: WebAction)
+where
+    S: SinkExt<Message> + Unpin,
+    <S as futures_util::Sink<Message>>::Error: std::fmt::Debug,
+{
+    let json = serde_json::to_string(&action).expect("Failed to serialize WebAction");
+    tx.send(Message::Text(json.into()))
+        .await
+        .expect("Failed to send message");
+}
 
-    tx.send(Message::Text("99".into())).await.unwrap();
-    assert!(matches!(recv(&mut rx).await, GameMessage::Error { .. }));
-
-    tx.send(Message::Text("quit".into())).await.unwrap();
-    assert!(matches!(recv(&mut rx).await, GameMessage::Quit { .. }));
+async fn recv<S>(rx: &mut S) -> GameMessage
+where
+    S: StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>> + Unpin,
+{
+    let msg = rx
+        .next()
+        .await
+        .unwrap()
+        .expect("Stream closed unexpectedly");
+    serde_json::from_str(msg.to_text().unwrap()).expect("Failed to parse GameMessage JSON")
 }
